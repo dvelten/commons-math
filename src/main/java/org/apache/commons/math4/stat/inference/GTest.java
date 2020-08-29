@@ -21,6 +21,7 @@ import org.apache.commons.math4.exception.DimensionMismatchException;
 import org.apache.commons.math4.exception.MaxCountExceededException;
 import org.apache.commons.math4.exception.NotPositiveException;
 import org.apache.commons.math4.exception.NotStrictlyPositiveException;
+import org.apache.commons.math4.exception.NullArgumentException;
 import org.apache.commons.math4.exception.OutOfRangeException;
 import org.apache.commons.math4.exception.ZeroException;
 import org.apache.commons.math4.exception.util.LocalizedFormats;
@@ -302,6 +303,208 @@ public class GTest {
         return -h;
     }
 
+
+    /**
+     * <p>Computes the G-Value (Log-Likelihood Ratio)
+     * of a contingency table (also known as a cross tabulation)</p>
+     *
+     * <p>The marginal sums of the rows and marginal sums of columns are not required to be the same.</p>
+     *
+     * <p>The formula used to compute the test statistic is </p>
+     *
+     * <p>{@code 2 * totalSum * [H(rowSums) + H(colSums) - H(k)]}</p>
+     *
+     * <p> where {@code H} is the
+     * <a href="http://en.wikipedia.org/wiki/Entropy_%28information_theory%29">
+     * Shannon Entropy</a> of the random variable formed by viewing the elements
+     * of the argument array as incidence counts; <br>
+     * {@code k} is the matrix {@code counts}; <br>
+     * {@code rowSums, colSums} are the row/col sums of {@code k}; <br>
+     * and {@code totalSum} is the overall sum of all entries in {@code k}.</p>
+     *
+     * <p>This statistic can be used to perform a G test evaluating the null
+     * hypothesis that both observed counts are independent</p>
+     *
+     * <p> <strong>Preconditions</strong>: <ul>
+     * <li>All counts must be &ge; 0.</li>
+     * <li>The Row-sum of observed counts must be larger than 0.</li>
+     * <li>The Column-sum of observed counts must be larger than 0.</li>
+     * <li>The count array must be rectangular (i.e. all count[i] sub-arrays
+     *  must have the same length).
+     * </li>
+     * <li>The contingency table represented by <code>counts</code> must have at
+     *  least 2 columns and at least 2 rows.
+     * </li>
+     * </ul>
+     *
+     * <p>If any of the preconditions are not met, a
+     * {@code MathIllegalArgumentException} is thrown.</p>
+     *
+     * @param counts array representation of contingency table
+     * @return the value of the G statistic (G-value)
+     * @throws DimensionMismatchException the lengths of the sub-arrays do not
+     * match or their common length or the length is less than 2
+     * @throws NullArgumentException if counts is null
+     * @throws NotPositiveException if any entry in {@code counts} is negative
+     * @throws ZeroException if either the column-sum of a row or the row-sum of a column is zero.
+     */
+    public double g(final long[][] counts)
+            throws NullArgumentException, NotPositiveException,
+            DimensionMismatchException {
+
+        checkArray(counts);
+        int nRows = counts.length;
+        int nCols = counts[0].length;
+
+        // compute row, column and total sums
+        long[] rowSum = new long[nRows];
+        long[] colSum = new long[nCols];
+        long total = 0;
+        for (int row = 0; row < nRows; row++) {
+            for (int col = 0; col < nCols; col++) {
+                rowSum[row] += counts[row][col];
+                colSum[col] += counts[row][col];
+                total += counts[row][col];
+            }
+        }
+        for (int row = 0; row < nRows; row++) {
+            if (rowSum[row] == 0) {
+                throw new ZeroException();
+            }
+        }
+        for (int col = 0; col < nCols; col++) {
+            if (colSum[col] == 0) {
+                throw new ZeroException(LocalizedFormats.OBSERVED_COUNTS_BOTTH_ZERO_FOR_ENTRY, col);
+            }
+        }
+
+        return 2 * total * (entropy(rowSum) + entropy(colSum) - entropy(counts));
+
+    }
+
+    /**
+     * <p>Returns the <i>observed significance level</i>, or <a href=
+     * "https://en.wikipedia.org/wiki/P-value">
+     * p-value</a> of a contingency table (also known as a cross tabulation)
+     * using the G statistic (Log-Likelihood Ratio).
+     *
+     * <p>The marginal sums of the rows and marginal sums of columns are not required to be the same.</p>
+     *
+     * <p>The formula used to compute the test statistic is </p>
+     *
+     * <p>{@code 2 * totalSum * [H(rowSums) + H(colSums) - H(k)]}</p>
+     *
+     * <p> where {@code H} is the
+     * <a href="http://en.wikipedia.org/wiki/Entropy_%28information_theory%29">
+     * Shannon Entropy</a> of the random variable formed by viewing the elements
+     * of the argument array as incidence counts; <br>
+     * {@code k} is the matrix {@code counts}; <br>
+     * {@code rowSums, colSums} are the row/col sums of {@code k}; <br>
+     * and {@code totalSum} is the overall sum of all entries in {@code k}.</p>
+     *
+     * <p>This statistic can be used to perform a G test evaluating the null
+     * hypothesis that both observed counts are independent</p>
+     *
+     * <p> <strong>Preconditions</strong>: <ul>
+     * <li>All counts must be &ge; 0.</li>
+     * <li>The Row-sum of observed counts must be larger than 0.</li>
+     * <li>The Column-sum of observed counts must be larger than 0.</li>
+     * <li>The count array must be rectangular (i.e. all count[i] sub-arrays
+     *  must have the same length).
+     * </li>
+     * <li>The contingency table represented by <code>counts</code> must have at
+     *  least 2 columns and at least 2 rows.
+     * </li>
+     * </ul>
+     *
+     * <p>If any of the preconditions are not met, a
+     * {@code MathIllegalArgumentException} is thrown.</p>
+     *
+     * @param counts array representation of contingency table
+     * @return p-value
+     * @throws DimensionMismatchException the lengths of the sub-arrays do not
+     * match or their common length or the length is less than 2
+     * @throws NullArgumentException if counts is null
+     * @throws NotPositiveException if any entry in {@code counts} is negative
+     * @throws MaxCountExceededException if an error occurs computing the p-value.
+     * @throws ZeroException if either the column-sum of a row or the row-sum of a column is zero.
+     */
+    public double gTest(final long[][] counts)
+            throws NullArgumentException, DimensionMismatchException,
+            NotPositiveException, MaxCountExceededException {
+
+        checkArray(counts);
+        double df = ((double) counts.length -1) * ((double) counts[0].length - 1);
+        // pass a null rng to avoid unneeded overhead as we will not sample from this distribution
+        final ChiSquaredDistribution distribution = new ChiSquaredDistribution(df);
+        return 1 - distribution.cumulativeProbability(g(counts));
+
+    }
+
+    /**
+     * <p>Performs a G-Test (Log-Likelihood Ratio Test) on a
+     * contingency table (also known as a cross tabulation)</p>
+     *
+     * <p>The test evaluates the null hypothesis that the frequency counts of each row follows a common distribution
+     * and does not depend on the row. (Rows and columns are stochastically independent)</p>
+     *
+     * <p>The rows of the contingency table are
+     * <code>count[0], ... , count[count.length - 1] </code></p>
+     *
+     * <p>Returns true if the null
+     * hypothesis can be rejected  with 100 * (1 - alpha) percent confidence.</p>
+     *
+     * <p>The marginal sums of the rows and marginal sums of columns are not required to be the same.</p>
+     *
+     * <p>The formula used to compute the test statistic is </p>
+     *
+     * <p>{@code 2 * totalSum * [H(rowSums) + H(colSums) - H(k)]}</p>
+     *
+     * <p> where {@code H} is the
+     * <a href="http://en.wikipedia.org/wiki/Entropy_%28information_theory%29">
+     * Shannon Entropy</a> of the random variable formed by viewing the elements
+     * of the argument array as incidence counts; <br>
+     * {@code k} is the matrix {@code counts}; <br>
+     * {@code rowSums, colSums} are the row/col sums of {@code k}; <br>
+     * and {@code totalSum} is the overall sum of all entries in {@code k}.</p>
+     *
+     * <p> <strong>Preconditions</strong>: <ul>
+     * <li>All counts must be &ge; 0.</li>
+     * <li>The Row-sum of observed counts must be larger than 0.</li>
+     * <li>The Column-sum of observed counts must be larger than 0.</li>
+     * <li>The count array must be rectangular (i.e. all count[i] sub-arrays
+     *  must have the same length).
+     * </li>
+     * <li>The contingency table represented by <code>counts</code> must have at
+     *  least 2 columns and at least 2 rows.
+     * </li>
+     * </ul>
+     *
+     * <p>If any of the preconditions are not met, a
+     * {@code MathIllegalArgumentException} is thrown.</p>
+     *
+     * @param counts array representation of contingency table
+     * @param alpha significance level of the test
+     * @return p-value
+     * @throws DimensionMismatchException the lengths of the sub-arrays do not
+     * match or their common length or the length is less than 2
+     * @throws NullArgumentException if counts is null
+     * @throws NotPositiveException if any entry in {@code counts} is negative
+     * @throws OutOfRangeException if {@code alpha} is not in the range (0, 0.5]
+     * @throws MaxCountExceededException if an error occurs computing the p-value.
+     * @throws ZeroException if either the column-sum of a row or the row-sum of a column is zero.
+     */
+    public boolean gTest(final long[][] counts, final double alpha)
+            throws NullArgumentException, DimensionMismatchException,
+            NotPositiveException, OutOfRangeException, MaxCountExceededException {
+
+        if ((alpha <= 0) || (alpha > 0.5)) {
+            throw new OutOfRangeException(LocalizedFormats.OUT_OF_BOUND_SIGNIFICANCE_LEVEL,
+                    alpha, 0, 0.5);
+        }
+        return gTest(counts) < alpha;
+
+    }
     /**
      * <p>Computes a G (Log-Likelihood Ratio) two sample test statistic for
      * independence comparing frequency counts in
@@ -429,6 +632,13 @@ public class GTest {
     }
 
     /**
+     * <p>Performs a G-Test (Log-Likelihood Ratio Test) comparing two binned
+     * data sets. The test evaluates the null hypothesis that the two lists
+     * of observed counts conform to the same frequency distribution, with
+     * significance level {@code alpha}. Returns true iff the null
+     * hypothesis can be rejected  with 100 * (1 - alpha) percent confidence.
+     * </p>
+
      * <p>Returns the <i>observed significance level</i>, or <a href=
      * "http://www.cas.lancs.ac.uk/glossary_v1.1/hyptest.html#pvalue">
      * p-value</a>, associated with a G-Value (Log-Likelihood Ratio) for two
@@ -535,4 +745,31 @@ public class GTest {
         }
         return gTestDataSetsComparison(observed1, observed2) < alpha;
     }
+
+    /**
+     * Checks to make sure that the input long[][] array is rectangular,
+     * has at least 2 rows and 2 columns, and has all non-negative entries.
+     *
+     * @param in input contingency table to check
+     * @throws NullArgumentException if the array is null
+     * @throws DimensionMismatchException if the array is not valid
+     * @throws NotPositiveException if the array contains any negative entries
+     */
+    private void checkArray(final long[][] in)
+        throws NullArgumentException, DimensionMismatchException,
+        NotPositiveException {
+
+        MathArrays.checkRectangular(in);
+        MathArrays.checkNonNegative(in);
+
+        if (in.length < 2) {
+            throw new DimensionMismatchException(in.length, 2);
+        }
+
+        if (in[0].length < 2) {
+            throw new DimensionMismatchException(in[0].length, 2);
+        }
+
+    }
+
 }
